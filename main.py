@@ -1,4 +1,3 @@
-import argparse
 from discord_api_key import DISCORD_API_KEY
 import discord
 from discord.ext import commands
@@ -56,7 +55,7 @@ async def play_youtube(ctx, url):
 
 # Function to play music
 @bot.command()
-async def play(ctx):
+async def play(ctx, path):
     voice_channel = ctx.author.voice.channel
     if voice_channel is None:
         await ctx.send("You need to be in a voice channel to use this command.")
