@@ -1,6 +1,8 @@
 from discord_api_key import DISCORD_API_KEY
 import discord
 from discord.ext import commands
+from urllib.parse import urlparse
+
 import yt_dlp
 
 # Create an instance of the bot
@@ -26,6 +28,35 @@ def handle_play_music(voice_client):
 
     voice_client.play(discord.FFmpegPCMAudio(url), after=lambda e: handle_music_done(voice_client))
 
+def get_platform(raw_url):
+    parsed_url = urlparse(raw_url)
+    domain = parsed_url.netloc
+    if domain.startswith("www."):
+        domain = domain[4:]  # Remove "www." if present
+    parts = domain.split('.')
+    if len(parts) >= 2:
+        main_domain = parts[-2] # Get the last two parts of the domain
+        return main_domain
+    else:
+        return domain
+
+def get_music_url(raw_url):
+    platform = get_platform(raw_url)
+
+    if (platform.lower() == "youtube" or platform.lower() == "soundcloud"):
+        # Use youtube_dl to extract the audio stream
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'extractaudio': True,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(raw_url, download=False)
+            url = info['url']
+            return url
+
+    return url
+
 # Event: Bot is ready
 @bot.event
 async def on_ready():
@@ -33,7 +64,7 @@ async def on_ready():
 
 # Function to play music
 @bot.command()
-async def play(ctx, url):
+async def play(ctx, raw_url):
     voice_channel = ctx.author.voice.channel
     voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
 
@@ -45,15 +76,7 @@ async def play(ctx, url):
     
     voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
 
-    # Use youtube_dl to extract the audio stream
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'extractaudio': True,
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        url = info['url']
+    url = get_music_url(raw_url)
 
     list_urls.append(url)
     if (len(list_urls) == 1):
