@@ -36,8 +36,11 @@ def handle_play_music(voice_client):
         return
     
     title, url = list_songs[0]
-    
-    voice_client.play(discord.FFmpegPCMAudio(url), after=lambda e: handle_music_done(voice_client, e))
+
+    # fix suddenly stop playing https://stackoverflow.com/questions/75493436/why-is-the-ffmpeg-process-in-discordpy-terminating-without-playing-anything
+    FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5','options': '-vn -filter:a "volume=0.25"'}
+    audio_source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
+    voice_client.play(audio_source, after=lambda e: handle_music_done(voice_client, e))
 
 def get_platform(raw_url):
     parsed_url = urlparse(raw_url)
@@ -109,7 +112,7 @@ async def play(ctx, raw_url):
     message = get_song_titles(list_songs)
     await ctx.send(message)
 
-    if (len(list_songs) == 1):
+    if not(voice_client.is_playing()):
         handle_play_music(voice_client)
     
 @bot.command()
