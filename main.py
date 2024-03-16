@@ -1,4 +1,5 @@
 from discord_api_key import DISCORD_API_KEY
+import asyncio
 import discord
 from discord.ext import commands
 from urllib.parse import urlparse
@@ -34,18 +35,18 @@ def handle_play_music(voice_client):
     if (len(list_songs) == 0):
         return
     
-    url = list_songs[0][1]
-
+    title, url = list_songs[0]
+    
     voice_client.play(discord.FFmpegPCMAudio(url), after=lambda e: handle_music_done(voice_client, e))
 
 def get_platform(raw_url):
     parsed_url = urlparse(raw_url)
     domain = parsed_url.netloc
     if domain.startswith("www."):
-        domain = domain[4:]  # Remove "www." if present
+        domain = domain[4:]
     parts = domain.split('.')
     if len(parts) >= 2:
-        main_domain = parts[-2] # Get the last two parts of the domain
+        main_domain = parts[-2]
         return main_domain
     else:
         return domain
@@ -68,10 +69,24 @@ def get_music_url(raw_url):
 
     return title, url
 
+async def set_presense():
+    while True:
+        if (len(list_songs) == 0):
+            title = "Idle!"
+        else:
+            title, _ = list_songs[0]
+
+        await bot.change_presence(activity=discord.Game(name=title))
+
+        await asyncio.sleep(10)
+
 # Event: Bot is ready
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
+
+    bot.loop.create_task(set_presense())
+    
 
 # Function to play music
 @bot.command()
