@@ -10,23 +10,33 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 is_playing = False
-list_urls = []
+list_songs = []
 
-def handle_music_done(voice_client):
-    if (len(list_urls) == 0):
+def get_song_titles(list_songs):
+    message = ""
+    for song in list_songs:
+        message += song[0] + "\n"
+
+    if (message == ""):
+        message = "No song in the list"
+
+    return message
+
+def handle_music_done(voice_client, e):
+    if (len(list_songs) == 0):
         return
     
-    list_urls.pop(0)
+    list_songs.pop(0)
 
     handle_play_music(voice_client)
 
 def handle_play_music(voice_client):
-    if (len(list_urls) == 0):
+    if (len(list_songs) == 0):
         return
     
-    url = list_urls[0]
+    url = list_songs[0][1]
 
-    voice_client.play(discord.FFmpegPCMAudio(url), after=lambda e: handle_music_done(voice_client))
+    voice_client.play(discord.FFmpegPCMAudio(url), after=lambda e: handle_music_done(voice_client, e))
 
 def get_platform(raw_url):
     parsed_url = urlparse(raw_url)
@@ -53,9 +63,10 @@ def get_music_url(raw_url):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(raw_url, download=False)
             url = info['url']
-            return url
+            title = info['title']
+            return title, url
 
-    return url
+    return title, url
 
 # Event: Bot is ready
 @bot.event
@@ -75,11 +86,15 @@ async def play(ctx, raw_url):
         await voice_channel.connect()
     
     voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
+    
+    title, url = get_music_url(raw_url)
 
-    url = get_music_url(raw_url)
+    list_songs.append((title, url))
 
-    list_urls.append(url)
-    if (len(list_urls) == 1):
+    message = get_song_titles(list_songs)
+    await ctx.send(message)
+
+    if (len(list_songs) == 1):
         handle_play_music(voice_client)
     
 @bot.command()
@@ -97,7 +112,27 @@ async def skip(ctx):
 
     voice_client.stop()
 
-    handle_music_done(voice_client)
+@bot.command()
+async def list(ctx):
+    message = get_song_titles(list_songs)
+    await ctx.send(message)
+
+@bot.command()
+async def stop(ctx):
+    
+    voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
+
+    if not voice_client is None: #test if voice is None
+        if not voice_client.is_connected():
+            return
+    else:
+        return
+    
+    voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
+
+    voice_client.stop()
+
+    voice_client.disconnect()
 
 # Run the bot
 bot.run(DISCORD_API_KEY)
