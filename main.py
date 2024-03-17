@@ -3,7 +3,7 @@ import asyncio
 import discord
 from discord.ext import commands
 from urllib.parse import urlparse
-
+import time
 import re
 import yt_dlp
 
@@ -11,7 +11,8 @@ import yt_dlp
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-is_playing = False
+start_time = int(time.time())
+music_duration = 0
 list_songs = []
 
 
@@ -55,6 +56,7 @@ def handle_play_music(voice_client):
     # fix suddenly stop playing https://stackoverflow.com/questions/75493436/why-is-the-ffmpeg-process-in-discordpy-terminating-without-playing-anything
     FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5','options': '-vn -filter:a "volume=0.25"'}
     audio_source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
+    start_time = int(time.time())
     voice_client.play(audio_source, after=lambda e: handle_music_done(voice_client, e))
 
 def get_platform(raw_url):
@@ -96,9 +98,18 @@ def get_music_url(str_input):
 
             url = info['url']
             title = info['title']
+            global music_duration
+            music_duration = info['duration']
             return title, url
 
     return title, url
+
+def timestamp_to_hh_mm_ss(timestamp):
+    # Calculate hours, minutes, and seconds
+    hours, remainder = divmod(timestamp, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    return f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
 
 async def set_presense():
     while True:
@@ -106,9 +117,11 @@ async def set_presense():
             title = "Idle!"
         else:
             title, _ = list_songs[0]
-
+        playing_time = abs(int(time.time()) - start_time)
+        remaining_time = max(music_duration - playing_time, 0)
         await bot.change_presence(activity=discord.Game(name=title))
-
+        await asyncio.sleep(10)
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name=str(timestamp_to_hh_mm_ss(remaining_time)) + " remaining"))
         await asyncio.sleep(10)
 
 # Event: Bot is ready
