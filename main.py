@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 from urllib.parse import urlparse
 
+import re
 import yt_dlp
 
 # Create an instance of the bot
@@ -12,6 +13,20 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 is_playing = False
 list_songs = []
+
+
+def is_url(string):
+    # Regular expression pattern to match URLs
+    url_pattern = re.compile(
+        r'^(?:http|ftp)s?://'  # http:// or https://
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
+        r'localhost|'  # localhost...
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
+        r'(?::\d+)?'  # optional port
+        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+
+    # Match the string against the URL pattern
+    return bool(re.match(url_pattern, string))
 
 def get_song_titles(list_songs):
     message = ""
@@ -54,8 +69,13 @@ def get_platform(raw_url):
     else:
         return domain
 
-def get_music_url(raw_url):
-    platform = get_platform(raw_url)
+def get_music_url(str_input):
+    isUrl = is_url(str_input)
+    
+    if (isUrl):
+        platform = get_platform(str_input)
+    else:
+        platform = 'youtube'
 
     if (platform.lower() == "youtube" or platform.lower() == "soundcloud"):
         # Use youtube_dl to extract the audio stream
@@ -65,7 +85,15 @@ def get_music_url(raw_url):
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(raw_url, download=False)
+            if (isUrl):
+                info = ydl.extract_info(str_input, download=False)
+            else:
+                info = ydl.extract_info(f'ytsearch:{str_input}', download=False)
+
+                if 'entries' in info:
+                    # Select the first search result
+                    info = info['entries'][0]
+
             url = info['url']
             title = info['title']
             return title, url
@@ -93,7 +121,7 @@ async def on_ready():
 
 # Function to play music
 @bot.command()
-async def play(ctx, raw_url):
+async def play(ctx, *, raw_url):
     voice_channel = ctx.author.voice.channel
     voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
 
