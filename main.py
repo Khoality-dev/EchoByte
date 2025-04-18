@@ -1,5 +1,5 @@
-from discord_api_key import DISCORD_API_KEY
 import asyncio
+import os
 import discord
 from discord.ext import commands
 from urllib.parse import urlparse
@@ -194,4 +194,7 @@ async def stop(ctx):
     voice_client.disconnect()
 
 # Run the bot
+DISCORD_API_KEY = os.environ.get("DISCORD_API_KEY")
+if DISCORD_API_KEY is None:
+    raise ValueError("DISCORD_API_KEY environment variable not set")
 bot.run(DISCORD_API_KEY)
