@@ -17,3 +17,12 @@ Place your Discord bot token in a file named `.env` in the root directory of the
 ```
 docker compose up -d
 ```
+
+## Updating
+
+YouTube changes often, and playback breaks until yt-dlp is updated. A normal rebuild reuses the cached pip layer, so rebuild without the cache to get the latest yt-dlp:
+
+```
+docker compose build --no-cache
+docker compose up -d
+```

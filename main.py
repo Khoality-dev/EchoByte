@@ -51,12 +51,14 @@ def handle_play_music(voice_client):
     if (len(list_songs) == 0):
         return
     
-    title, url = list_songs[0]
+    title, url, duration = list_songs[0]
 
     # fix suddenly stop playing https://stackoverflow.com/questions/75493436/why-is-the-ffmpeg-process-in-discordpy-terminating-without-playing-anything
     FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5','options': '-vn -filter:a "volume=0.25"'}
     audio_source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
+    global start_time, music_duration
     start_time = int(time.time())
+    music_duration = duration
     voice_client.play(audio_source, after=lambda e: handle_music_done(voice_client, e))
 
 def get_platform(raw_url):
@@ -79,11 +81,14 @@ def get_music_url(str_input):
     else:
         platform = 'youtube'
 
-    if (platform.lower() == "youtube" or platform.lower() == "soundcloud"):
+    # "youtu" is the youtu.be short link
+    if (platform.lower() in ("youtube", "youtu", "soundcloud")):
         # Use youtube_dl to extract the audio stream
         ydl_opts = {
             'format': 'bestaudio/best',
             'extractaudio': True,
+            # only play the video itself when the link also has &list=...
+            'noplaylist': True,
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -98,11 +103,11 @@ def get_music_url(str_input):
 
             url = info['url']
             title = info['title']
-            global music_duration
-            music_duration = info['duration']
-            return title, url
+            # livestreams have no duration
+            duration = info.get('duration') or 0
+            return title, url, duration
 
-    return title, url
+    raise ValueError(f"Unsupported platform: {platform}")
 
 def timestamp_to_hh_mm_ss(timestamp):
     # Calculate hours, minutes, and seconds
@@ -116,7 +121,7 @@ async def set_presense():
         if (len(list_songs) == 0):
             title = "Idle!"
         else:
-            title, _ = list_songs[0]
+            title = list_songs[0][0]
         playing_time = abs(int(time.time()) - start_time)
         remaining_time = max(music_duration - playing_time, 0)
         await bot.change_presence(activity=discord.Game(name=title))
@@ -135,6 +140,17 @@ async def on_ready():
 # Function to play music
 @bot.command()
 async def play(ctx, *, raw_url):
+    if ctx.author.voice is None:
+        await ctx.send("Join a voice channel first")
+        return
+
+    try:
+        # yt-dlp blocks, so run it in a thread to keep the Discord heartbeat alive
+        title, url, duration = await asyncio.to_thread(get_music_url, raw_url)
+    except (yt_dlp.utils.DownloadError, ValueError) as e:
+        await ctx.send(f"Could not play that: {e}")
+        return
+
     voice_channel = ctx.author.voice.channel
     voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
 
@@ -145,10 +161,8 @@ async def play(ctx, *, raw_url):
         await voice_channel.connect()
     
     voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
-    
-    title, url = get_music_url(raw_url)
 
-    list_songs.append((title, url))
+    list_songs.append((title, url, duration))
 
     message = get_song_titles(list_songs)
     await ctx.send(message)
@@ -189,9 +203,12 @@ async def stop(ctx):
     
     voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
 
+    # clear the queue first, otherwise the after callback starts the next song
+    list_songs.clear()
+
     voice_client.stop()
 
-    voice_client.disconnect()
+    await voice_client.disconnect()
 
 # Run the bot
 DISCORD_API_KEY = os.environ.get("DISCORD_API_KEY")

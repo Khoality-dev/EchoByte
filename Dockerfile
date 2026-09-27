@@ -1,6 +1,8 @@
-FROM python:3.10.17-slim-bullseye
+FROM python:3.12-slim-bookworm
 
 RUN apt-get update && apt-get install -y ffmpeg
+
+ENV PYTHONUNBUFFERED=1
 
 RUN mkdir -p /app
 WORKDIR /app
